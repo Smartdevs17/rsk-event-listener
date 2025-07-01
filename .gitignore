@@ -1,0 +1,57 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Output and build directories
+/bin/
+/build/
+/dist/
+/coverage.out
+
+# Dependency directories
+/vendor/
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+*.pid
+
+# Environment files
+.env
+.env.*
+
+# Data and database files
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Test artifacts
+*.coverprofile
+*.testresult
+/test_storage.db
+
+# Docker artifacts
+*.pid
+*.sock
+
+# Misc
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
