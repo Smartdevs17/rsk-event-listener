@@ -713,3 +713,8 @@ func (p *PostgreSQLStorage) GetAllContracts(ctx context.Context) ([]*models.Cont
 	// Implementation similar to SQLite but with PostgreSQL syntax
 	return nil, nil
 }
+
+func (p *PostgreSQLStorage) StoreProcessingResult(ctx context.Context, data map[string]interface{}) error {
+	// Implementation similar to SQLite but with PostgreSQL syntax
+	return nil
+}

@@ -643,4 +643,17 @@ func (s *SQLiteStorage) GetAllContracts(ctx context.Context) ([]*models.Contract
 	return s.GetContracts(ctx, nil)
 }
 
+// StoreProcessingResult stores the result of processing in the database
+func (s *SQLiteStorage) StoreProcessingResult(ctx context.Context, data map[string]interface{}) error {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return utils.NewAppError(utils.ErrCodeDatabase, "Failed to marshal processing result", err.Error())
+	}
+	_, err = s.db.ExecContext(ctx, "INSERT INTO processing_results (data, created_at) VALUES (?, ?)", string(jsonData), time.Now())
+	if err != nil {
+		return utils.NewAppError(utils.ErrCodeDatabase, "Failed to store processing result", err.Error())
+	}
+	return nil
+}
+
 // Additional methods implementation continues...
