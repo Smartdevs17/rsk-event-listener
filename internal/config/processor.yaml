@@ -1,0 +1,33 @@
+processor:
+  max_concurrent_processing: 10
+  processing_timeout: 30s
+  retry_attempts: 3
+  retry_delay: 5s
+  enable_aggregation: true
+  aggregation_window: 1m
+  enable_validation: true
+  buffer_size: 1000
+
+notification:
+  max_concurrent_notifications: 5
+  notification_timeout: 10s
+  retry_attempts: 3
+  retry_delay: 2s
+  enable_email_notifications: true
+  enable_webhook_notifications: true
+  queue_size: 500
+  
+  email:
+    smtp_host: "smtp.gmail.com"
+    smtp_port: 587
+    username: "your-email@gmail.com"
+    password: "your-app-password"
+    from_email: "your-email@gmail.com"
+    from_name: "RSK Event Listener"
+    use_tls: true
+    timeout: 30s
+
+integration:
+  auto_process: true
+  batch_size: 100
+  processing_delay: 5s

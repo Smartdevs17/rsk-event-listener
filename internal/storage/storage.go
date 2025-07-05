@@ -57,6 +57,8 @@ type Storage interface {
 	LogEvent(ctx context.Context, eventType string, data map[string]interface{}) error
 	GetLogsByType(ctx context.Context, eventType string, limit int) ([]*models.LogEntry, error)
 	GetAllContracts(ctx context.Context) ([]*models.Contract, error)
+	// Custom processing result storage
+	StoreProcessingResult(ctx context.Context, data map[string]interface{}) error
 }
 
 // BlockProcessingStatus tracks block processing status

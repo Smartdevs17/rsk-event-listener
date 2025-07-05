@@ -58,4 +58,5 @@ const (
 	ErrCodeBlockchain    = "BLOCKCHAIN_ERROR"
 	ErrCodeConfiguration = "CONFIGURATION_ERROR"
 	ErrCodeProcessing    = "PROCESSING_ERROR"
+	ErrCodeExternal      = "EXTERNAL_ERROR"
 )
