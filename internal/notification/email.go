@@ -118,27 +118,26 @@ func (es *EmailSender) SendEmail(ctx context.Context, config *EmailConfig, data 
 	return nil
 }
 
-// sendEmailTLS sends email with TLS
+// sendEmailTLS sends email with STARTTLS (FIXED for Gmail)
 func (es *EmailSender) sendEmailTLS(to []string, message string) error {
 	addr := fmt.Sprintf("%s:%d", es.config.SMTPHost, es.config.SMTPPort)
 
-	// Create TLS connection
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: false,
-		ServerName:         es.config.SMTPHost,
-	}
-
-	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	// Open plain connection first (FIXED: not direct TLS)
+	client, err := smtp.Dial(addr)
 	if err != nil {
-		return fmt.Errorf("failed to connect with TLS: %w", err)
-	}
-	defer conn.Close()
-
-	client, err := smtp.NewClient(conn, es.config.SMTPHost)
-	if err != nil {
-		return fmt.Errorf("failed to create SMTP client: %w", err)
+		return fmt.Errorf("failed to connect to SMTP server: %w", err)
 	}
 	defer client.Close()
+
+	// Upgrade to TLS using STARTTLS (FIXED: proper Gmail approach)
+	tlsConfig := &tls.Config{
+		ServerName:         es.config.SMTPHost,
+		InsecureSkipVerify: false,
+	}
+
+	if err := client.StartTLS(tlsConfig); err != nil {
+		return fmt.Errorf("failed to start TLS: %w", err)
+	}
 
 	// Authenticate
 	if es.auth != nil {
@@ -327,22 +326,136 @@ func (es *EmailSender) GetEmailStats() map[string]interface{} {
 	}
 }
 
-// TestWebhook tests a webhook configuration
-func (ws *WebhookSender) TestWebhook(ctx context.Context, config *WebhookConfig) (*WebhookResponse, error) {
-	// Validate config
-	if err := ws.ValidateWebhookConfig(config); err != nil {
-		return nil, err
+// SetGmailConfig configures the email sender for Gmail
+func (es *EmailSender) SetGmailConfig(username, password string) {
+	es.config = &EmailSenderConfig{
+		SMTPHost:    "smtp.gmail.com",
+		SMTPPort:    587,
+		Username:    username,
+		Password:    password,
+		FromEmail:   username,
+		FromName:    "RSK Event Listener",
+		UseTLS:      true,
+		UseStartTLS: true,
+		Timeout:     30 * time.Second,
 	}
 
-	// Create test payload
-	testData := map[string]interface{}{
-		"test":      true,
-		"message":   "This is a test webhook from RSK Event Listener",
-		"timestamp": time.Now(),
+	// Setup SMTP authentication for Gmail
+	es.auth = smtp.PlainAuth("", username, password, "smtp.gmail.com")
+}
+
+// SetCustomEmailConfig configures the email sender with custom settings
+func (es *EmailSender) SetCustomEmailConfig(config *EmailSenderConfig) {
+	es.config = config
+
+	// Setup SMTP authentication if credentials are provided
+	if config.Username != "" && config.Password != "" {
+		es.auth = smtp.PlainAuth("", config.Username, config.Password, config.SMTPHost)
+	}
+}
+
+// GetConfig returns the current email configuration (without password)
+func (es *EmailSender) GetConfig() *EmailSenderConfig {
+	if es.config == nil {
+		return nil
 	}
 
-	payload := ws.buildWebhookPayload(testData)
-	response := ws.sendSingleWebhook(ctx, config, payload)
+	// Return a copy without the password for security
+	return &EmailSenderConfig{
+		SMTPHost:    es.config.SMTPHost,
+		SMTPPort:    es.config.SMTPPort,
+		Username:    es.config.Username,
+		Password:    "***hidden***",
+		FromEmail:   es.config.FromEmail,
+		FromName:    es.config.FromName,
+		UseTLS:      es.config.UseTLS,
+		UseStartTLS: es.config.UseStartTLS,
+		Timeout:     es.config.Timeout,
+	}
+}
 
-	return response, response.Error
+// TestGmailConnection tests the Gmail SMTP connection
+func (es *EmailSender) TestGmailConnection() error {
+	if es.config == nil {
+		return utils.NewAppError(utils.ErrCodeValidation, "Email configuration not set", "")
+	}
+
+	addr := fmt.Sprintf("%s:%d", es.config.SMTPHost, es.config.SMTPPort)
+
+	// Open plain connection
+	client, err := smtp.Dial(addr)
+	if err != nil {
+		return utils.NewAppError(utils.ErrCodeExternal, "Failed to connect to Gmail SMTP", err.Error())
+	}
+	defer client.Close()
+
+	// Upgrade to TLS (STARTTLS)
+	tlsConfig := &tls.Config{
+		ServerName: es.config.SMTPHost,
+	}
+	if err := client.StartTLS(tlsConfig); err != nil {
+		return utils.NewAppError(utils.ErrCodeExternal, "Failed to start TLS with Gmail SMTP", err.Error())
+	}
+
+	// Test authentication
+	if es.auth != nil {
+		if err := client.Auth(es.auth); err != nil {
+			return utils.NewAppError(utils.ErrCodeExternal, "Gmail authentication failed", err.Error())
+		}
+	}
+
+	return nil
+}
+
+// IsGmailConfigured checks if the email sender is configured for Gmail
+func (es *EmailSender) IsGmailConfigured() bool {
+	return es.config != nil && es.config.SMTPHost == "smtp.gmail.com"
+}
+
+// ValidateGmailConfig validates Gmail-specific configuration
+func (es *EmailSender) ValidateGmailConfig() error {
+	if es.config == nil {
+		return utils.NewAppError(utils.ErrCodeValidation, "Email configuration not set", "")
+	}
+
+	if es.config.SMTPHost != "smtp.gmail.com" {
+		return utils.NewAppError(utils.ErrCodeValidation, "Not configured for Gmail", "")
+	}
+
+	if es.config.SMTPPort != 587 {
+		return utils.NewAppError(utils.ErrCodeValidation, "Gmail requires port 587", "")
+	}
+
+	if es.config.Username == "" {
+		return utils.NewAppError(utils.ErrCodeValidation, "Gmail username is required", "")
+	}
+
+	if es.config.Password == "" {
+		return utils.NewAppError(utils.ErrCodeValidation, "Gmail password is required", "")
+	}
+
+	if !es.config.UseTLS {
+		return utils.NewAppError(utils.ErrCodeValidation, "Gmail requires TLS", "")
+	}
+
+	return nil
+}
+
+// SendEmailDirect provides a direct email sending method for testing
+func (es *EmailSender) SendEmailDirect(to []string, subject, body string) error {
+	if es.config == nil {
+		return utils.NewAppError(utils.ErrCodeValidation, "Email configuration not set", "")
+	}
+
+	// Build simple message
+	message := fmt.Sprintf("From: %s <%s>\r\n", es.config.FromName, es.config.FromEmail)
+	message += fmt.Sprintf("To: %s\r\n", strings.Join(to, ", "))
+	message += fmt.Sprintf("Subject: %s\r\n", subject)
+	message += "MIME-Version: 1.0\r\n"
+	message += "Content-Type: text/html; charset=UTF-8\r\n"
+	message += fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z))
+	message += "\r\n"
+	message += body
+
+	return es.sendEmailTLS(to, message)
 }
