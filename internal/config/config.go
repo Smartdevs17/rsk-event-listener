@@ -61,22 +61,33 @@ type MonitorConfig struct {
 
 // ProcessorConfig contains event processing configuration
 type ProcessorConfig struct {
-	Workers        int           `mapstructure:"workers"`
-	QueueSize      int           `mapstructure:"queue_size"`
-	ProcessTimeout time.Duration `mapstructure:"process_timeout"`
-	RetryAttempts  int           `mapstructure:"retry_attempts"`
-	RetryDelay     time.Duration `mapstructure:"retry_delay"`
-	EnableAsync    bool          `mapstructure:"enable_async"`
+	Workers                 int           `mapstructure:"workers"`
+	QueueSize               int           `mapstructure:"queue_size"`
+	ProcessTimeout          time.Duration `mapstructure:"process_timeout"`
+	RetryAttempts           int           `mapstructure:"retry_attempts"`
+	RetryDelay              time.Duration `mapstructure:"retry_delay"`
+	EnableAsync             bool          `mapstructure:"enable_async"`
+	MaxConcurrentProcessing int           `mapstructure:"max_concurrent_processing"`
+	ProcessingTimeout       time.Duration `mapstructure:"processing_timeout"`
+	EnableAggregation       bool          `mapstructure:"enable_aggregation"`
+	AggregationWindow       time.Duration `mapstructure:"aggregation_window"`
+	EnableValidation        bool          `mapstructure:"enable_validation"`
+	BufferSize              int           `mapstructure:"buffer_size"`
 }
 
 // NotificationConfig contains notification system configuration
 type NotificationConfig struct {
-	Enabled        bool          `mapstructure:"enabled"`
-	QueueSize      int           `mapstructure:"queue_size"`
-	Workers        int           `mapstructure:"workers"`
-	RetryDelay     time.Duration `mapstructure:"retry_delay"`
-	MaxRetries     int           `mapstructure:"max_retries"`
-	DefaultChannel string        `mapstructure:"default_channel"`
+	Enabled                    bool          `mapstructure:"enabled"`
+	QueueSize                  int           `mapstructure:"queue_size"`
+	Workers                    int           `mapstructure:"workers"`
+	RetryDelay                 time.Duration `mapstructure:"retry_delay"`
+	MaxRetries                 int           `mapstructure:"max_retries"`
+	DefaultChannel             string        `mapstructure:"default_channel"`
+	MaxConcurrentNotifications int           `mapstructure:"max_concurrent_notifications"`
+	NotificationTimeout        time.Duration `mapstructure:"notification_timeout"`
+	RetryAttempts              int           `mapstructure:"retry_attempts"`
+	EnableEmailNotifications   bool          `mapstructure:"enable_email_notifications"`
+	EnableWebhookNotifications bool          `mapstructure:"enable_webhook_notifications"`
 }
 
 // ServerConfig contains HTTP server configuration
