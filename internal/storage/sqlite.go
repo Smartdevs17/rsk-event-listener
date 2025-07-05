@@ -656,4 +656,111 @@ func (s *SQLiteStorage) StoreProcessingResult(ctx context.Context, data map[stri
 	return nil
 }
 
+// Health checks the health of the database connection
+func (s *SQLiteStorage) Health() error {
+	return s.Ping()
+}
+
+func (s *SQLiteStorage) GetHealth() *StorageHealth {
+	return &StorageHealth{
+		StorageType: "SQLite",
+		Healthy:     s.Ping() == nil,
+		Details:     map[string]string{"connection_string": s.config.ConnectionString},
+		LastPing:    time.Now(),
+	}
+}
+
+func (s *SQLiteStorage) GetStats() (*StorageStats, error) {
+	return s.GetStorageStats()
+}
+
+func (s *SQLiteStorage) GetEventByHash(ctx context.Context, hash string) (*models.Event, error) {
+	query := `
+        SELECT id, block_number, block_hash, tx_hash, tx_index, log_index, address,
+               event_name, event_signature, data, timestamp, processed, processed_at
+        FROM events WHERE tx_hash = ?
+    `
+	row := s.db.QueryRowContext(ctx, query, hash)
+
+	var event models.Event
+	var dataJSON string
+	var processedAt sql.NullTime
+
+	err := row.Scan(&event.ID, &event.BlockNumber, &event.BlockHash, &event.TxHash,
+		&event.TxIndex, &event.LogIndex, &event.Address, &event.EventName,
+		&event.EventSig, &dataJSON, &event.Timestamp, &event.Processed, &processedAt)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, utils.NewAppError(utils.ErrCodeDatabase, "Failed to get event by hash", err.Error())
+	}
+
+	if err := json.Unmarshal([]byte(dataJSON), &event.Data); err != nil {
+		return nil, utils.NewAppError(utils.ErrCodeDatabase, "Failed to unmarshal event data", err.Error())
+	}
+
+	if processedAt.Valid {
+		event.ProcessedAt = &processedAt.Time
+	}
+
+	return &event, nil
+}
+
+func (s *SQLiteStorage) SearchEvents(ctx context.Context, filter models.EventFilter) ([]*models.Event, error) {
+	query := `
+        SELECT id, block_number, block_hash, tx_hash, tx_index, log_index, address,
+               event_name, event_signature, data, timestamp, processed, processed_at
+        FROM events WHERE 1=1
+    `
+	args := []interface{}{}
+
+	if filter.Query != nil && *filter.Query != "" {
+		query += " AND (event_name LIKE ? OR address LIKE ? OR tx_hash LIKE ?)"
+		q := "%" + *filter.Query + "%"
+		args = append(args, q, q, q)
+	}
+
+	// Add ordering and pagination
+	query += " ORDER BY block_number DESC, log_index ASC"
+
+	if filter.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, filter.Limit)
+	}
+	if filter.Offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, filter.Offset)
+	}
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, utils.NewAppError(utils.ErrCodeDatabase, "Failed to search events", err.Error())
+	}
+	defer rows.Close()
+
+	var events []*models.Event
+	for rows.Next() {
+		var event models.Event
+		var dataJSON string
+		var processedAt sql.NullTime
+
+		err := rows.Scan(&event.ID, &event.BlockNumber, &event.BlockHash, &event.TxHash,
+			&event.TxIndex, &event.LogIndex, &event.Address, &event.EventName,
+			&event.EventSig, &dataJSON, &event.Timestamp, &event.Processed, &processedAt)
+		if err != nil {
+			return nil, utils.NewAppError(utils.ErrCodeDatabase, "Failed to scan event", err.Error())
+		}
+		if err := json.Unmarshal([]byte(dataJSON), &event.Data); err != nil {
+			return nil, utils.NewAppError(utils.ErrCodeDatabase, "Failed to unmarshal event data", err.Error())
+		}
+		if processedAt.Valid {
+			event.ProcessedAt = &processedAt.Time
+		}
+		events = append(events, &event)
+	}
+	return events, nil
+}
+
 // Additional methods implementation continues...

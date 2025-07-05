@@ -59,6 +59,12 @@ type Storage interface {
 	GetAllContracts(ctx context.Context) ([]*models.Contract, error)
 	// Custom processing result storage
 	StoreProcessingResult(ctx context.Context, data map[string]interface{}) error
+
+	// Health check
+	GetHealth() *StorageHealth
+	GetEventByHash(ctx context.Context, hash string) (*models.Event, error)
+	GetStats() (*StorageStats, error)
+	SearchEvents(ctx context.Context, filter models.EventFilter) ([]*models.Event, error)
 }
 
 // BlockProcessingStatus tracks block processing status
@@ -118,4 +124,13 @@ type StorageConfig struct {
 	MigrationsPath   string        `json:"migrations_path"`
 	RetentionDays    int           `json:"retention_days"`
 	BatchSize        int           `json:"batch_size"`
+}
+
+// StorageHealth represents the health status of the storage
+type StorageHealth struct {
+	StorageType string            `json:"storage_type"`
+	Healthy     bool              `json:"healthy"`
+	Details     map[string]string `json:"details,omitempty"`
+	LastPing    time.Time         `json:"last_ping"`
+	Error       string            `json:"error,omitempty"`
 }

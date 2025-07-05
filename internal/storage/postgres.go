@@ -648,6 +648,40 @@ func (p *PostgreSQLStorage) SetBlockProcessingStatus(status *BlockProcessingStat
 	return nil
 }
 
+func (p *PostgreSQLStorage) GetEventByHash(ctx context.Context, hash string) (*models.Event, error) {
+	query := `
+        SELECT id, block_number, block_hash, tx_hash, tx_index, log_index, address,
+               event_name, event_signature, data, timestamp, processed, processed_at
+        FROM events WHERE tx_hash = $1
+    `
+	row := p.db.QueryRowContext(ctx, query, hash)
+
+	var event models.Event
+	var dataJSON []byte
+	var processedAt sql.NullTime
+
+	err := row.Scan(&event.ID, &event.BlockNumber, &event.BlockHash, &event.TxHash,
+		&event.TxIndex, &event.LogIndex, &event.Address, &event.EventName,
+		&event.EventSig, &dataJSON, &event.Timestamp, &event.Processed, &processedAt)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, utils.NewAppError(utils.ErrCodeDatabase, "Failed to get event by hash", err.Error())
+	}
+
+	if err := json.Unmarshal(dataJSON, &event.Data); err != nil {
+		return nil, utils.NewAppError(utils.ErrCodeDatabase, "Failed to unmarshal event data", err.Error())
+	}
+
+	if processedAt.Valid {
+		event.ProcessedAt = &processedAt.Time
+	}
+
+	return &event, nil
+}
+
 // SaveNotification, GetPendingNotifications, UpdateNotificationStatus,
 // GetStorageStats, GetEventStats, Cleanup, and Vacuum methods would follow
 // similar patterns but with PostgreSQL-specific optimizations and syntax.
@@ -717,4 +751,78 @@ func (p *PostgreSQLStorage) GetAllContracts(ctx context.Context) ([]*models.Cont
 func (p *PostgreSQLStorage) StoreProcessingResult(ctx context.Context, data map[string]interface{}) error {
 	// Implementation similar to SQLite but with PostgreSQL syntax
 	return nil
+}
+
+func (p *PostgreSQLStorage) Health() error {
+	// Implementation similar to SQLite but with PostgreSQL syntax
+	return nil
+}
+
+func (p *PostgreSQLStorage) GetHealth() *StorageHealth {
+	// Implementation similar to SQLite but with PostgreSQL syntax
+	return nil
+}
+
+func (p *PostgreSQLStorage) GetStats() (*StorageStats, error) {
+	// Implementation similar to SQLite but with PostgreSQL syntax
+	return &StorageStats{}, nil
+}
+
+func (p *PostgreSQLStorage) SearchEvents(ctx context.Context, filter models.EventFilter) ([]*models.Event, error) {
+	query := `
+        SELECT id, block_number, block_hash, tx_hash, tx_index, log_index, address,
+               event_name, event_signature, data, timestamp, processed, processed_at
+        FROM events WHERE 1=1
+    `
+	args := []interface{}{}
+	argIndex := 1
+
+	if filter.Query != nil && *filter.Query != "" {
+		query += fmt.Sprintf(" AND (event_name ILIKE $%d OR address ILIKE $%d OR tx_hash ILIKE $%d)", argIndex, argIndex+1, argIndex+2)
+		q := "%" + *filter.Query + "%"
+		args = append(args, q, q, q)
+		argIndex += 3
+	}
+
+	// Add ordering and pagination
+	query += " ORDER BY block_number DESC, log_index ASC"
+
+	if filter.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT $%d", argIndex)
+		args = append(args, filter.Limit)
+		argIndex++
+	}
+	if filter.Offset > 0 {
+		query += fmt.Sprintf(" OFFSET $%d", argIndex)
+		args = append(args, filter.Offset)
+		argIndex++
+	}
+
+	rows, err := p.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, utils.NewAppError(utils.ErrCodeDatabase, "Failed to search events", err.Error())
+	}
+	defer rows.Close()
+
+	var events []*models.Event
+	for rows.Next() {
+		var event models.Event
+		var dataJSON []byte
+		var processedAt sql.NullTime
+
+		err := rows.Scan(&event.ID, &event.BlockNumber, &event.BlockHash, &event.TxHash,
+			&event.TxIndex, &event.LogIndex, &event.Address, &event.EventName,
+			&event.EventSig, &dataJSON, &event.Timestamp, &event.Processed, &processedAt)
+		if err != nil {
+			return nil, utils.NewAppError(utils.ErrCodeDatabase, "Failed to scan event", err.Error())
+		}
+		if err := json.Unmarshal(dataJSON, &event.Data); err != nil {
+			return nil, utils.NewAppError(utils.ErrCodeDatabase, "Failed to unmarshal event data", err.Error())
+		}
+		if processedAt.Valid {
+			event.ProcessedAt = &processedAt.Time
+		}
+		events = append(events, &event)
+	}
+	return events, nil
 }

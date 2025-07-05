@@ -114,6 +114,11 @@ type NotificationStats struct {
 	LastErrorTime            *time.Time    `json:"last_error_time,omitempty"`
 }
 
+type NotificationHealth struct {
+	Healthy bool   `json:"healthy"`
+	Error   string `json:"error,omitempty"`
+}
+
 // NewNotificationManager creates a new notification manager
 func NewNotificationManager(config *NotificationManagerConfig) *NotificationManager {
 	nm := &NotificationManager{
@@ -368,4 +373,17 @@ func (nm *NotificationManager) GetStats() *NotificationStats {
 
 	nm.stats.ActiveChannels = len(nm.channels)
 	return nm.stats
+}
+
+func (nm *NotificationManager) GetHealth() *NotificationHealth {
+	nm.mu.RLock()
+	defer nm.mu.RUnlock()
+	health := &NotificationHealth{
+		Healthy: nm.running,
+	}
+	// Optionally, add more checks here (e.g., last error)
+	if nm.stats != nil && nm.stats.LastError != nil {
+		health.Error = *nm.stats.LastError
+	}
+	return health
 }

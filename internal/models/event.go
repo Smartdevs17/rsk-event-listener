@@ -32,4 +32,5 @@ type EventFilter struct {
 	Processed       *bool           `json:"processed,omitempty"`
 	Limit           int             `json:"limit,omitempty"`
 	Offset          int             `json:"offset,omitempty"`
+	Query           *string         `json:"query,omitempty"`
 }
