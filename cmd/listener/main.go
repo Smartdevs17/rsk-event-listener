@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -29,15 +30,16 @@ const AppVersion = "1.0.0"
 // Application represents the main application
 type Application struct {
 	config       *config.Config
-	logger       *utils.Logger
+	logger       *logrus.Logger
 	connection   *connection.ConnectionManager
-	storage      *storage.Storage
+	storage      storage.Storage
 	monitor      *monitor.EventMonitor
 	processor    *processor.EventProcessor
 	notification *notification.NotificationManager
 	server       *server.HTTPServer
 	ctx          context.Context
 	cancel       context.CancelFunc
+	startTime    time.Time
 }
 
 // NewApplication creates a new application instance
@@ -45,9 +47,10 @@ func NewApplication(cfg *config.Config) (*Application, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	app := &Application{
-		config: cfg,
-		ctx:    ctx,
-		cancel: cancel,
+		config:    cfg,
+		ctx:       ctx,
+		cancel:    cancel,
+		startTime: time.Now(),
 	}
 
 	// Initialize logger
@@ -72,11 +75,11 @@ func (app *Application) initializeLogger() error {
 	}
 
 	app.logger = utils.GetLogger()
-	app.logger.Info("Logger initialized", map[string]interface{}{
+	app.logger.WithFields(logrus.Fields{
 		"level":  logCfg.Level,
 		"format": logCfg.Format,
 		"output": logCfg.Output,
-	})
+	}).Info("Logger initialized")
 
 	return nil
 }
@@ -123,23 +126,11 @@ func (app *Application) initializeComponents() error {
 func (app *Application) initializeConnection() error {
 	app.logger.Info("Initializing connection manager")
 
-	connCfg := &connection.ConnectionConfig{
-		RSKEndpoint:       app.config.RSK.NodeURL,
-		RequestTimeout:    app.config.RSK.RequestTimeout,
-		RetryAttempts:     app.config.RSK.RetryAttempts,
-		RetryDelay:        app.config.RSK.RetryDelay,
-		MaxConnections:    app.config.RSK.MaxConnections,
-		ConnectionTimeout: app.config.RSK.ConnectionTimeout,
-	}
+	// Use the actual RSKConfig structure
+	app.connection = connection.NewConnectionManager(&app.config.RSK)
 
-	var err error
-	app.connection, err = connection.NewConnectionManager(connCfg)
-	if err != nil {
-		return fmt.Errorf("failed to create connection manager: %w", err)
-	}
-
-	// Test connection
-	if err := app.connection.Connect(); err != nil {
+	// Test connection with health check
+	if err := app.connection.HealthCheck(); err != nil {
 		return fmt.Errorf("failed to connect to RSK node: %w", err)
 	}
 
@@ -176,13 +167,13 @@ func (app *Application) initializeNotification() error {
 	app.logger.Info("Initializing notification manager")
 
 	notificationCfg := &notification.NotificationManagerConfig{
-		MaxConcurrentNotifications: app.config.Notification.MaxConcurrentNotifications,
-		NotificationTimeout:        app.config.Notification.NotificationTimeout,
-		RetryAttempts:              app.config.Notification.RetryAttempts,
-		RetryDelay:                 app.config.Notification.RetryDelay,
-		EnableEmailNotifications:   app.config.Notification.EnableEmailNotifications,
-		EnableWebhookNotifications: app.config.Notification.EnableWebhookNotifications,
-		QueueSize:                  app.config.Notification.QueueSize,
+		MaxConcurrentNotifications: app.config.Notifications.MaxConcurrentNotifications,
+		NotificationTimeout:        app.config.Notifications.NotificationTimeout,
+		RetryAttempts:              app.config.Notifications.RetryAttempts,
+		RetryDelay:                 app.config.Notifications.RetryDelay,
+		EnableEmailNotifications:   app.config.Notifications.EnableEmailNotifications,
+		EnableWebhookNotifications: app.config.Notifications.EnableWebhookNotifications,
+		QueueSize:                  app.config.Notifications.QueueSize,
 		LogLevel:                   app.config.Logging.Level,
 	}
 
@@ -213,7 +204,7 @@ func (app *Application) initializeProcessor() error {
 	}
 
 	var err error
-	app.processor, err = processor.NewEventProcessor(processorCfg, app.storage, app.notification)
+	app.processor = processor.NewEventProcessor(app.storage, app.notification, processorCfg)
 	if err != nil {
 		return fmt.Errorf("failed to create event processor: %w", err)
 	}
@@ -231,22 +222,18 @@ func (app *Application) initializeProcessor() error {
 func (app *Application) initializeMonitor() error {
 	app.logger.Info("Initializing event monitor")
 
+	// Use actual monitor configuration structure
 	monitorCfg := &monitor.MonitorConfig{
-		RSKEndpoint:     app.config.RSK.NodeURL,
-		PollInterval:    app.config.Monitor.PollInterval,
-		StartBlock:      app.config.Monitor.StartBlock,
-		MaxBlockRange:   app.config.Monitor.MaxBlockRange,
-		ConcurrentJobs:  app.config.Monitor.ConcurrentJobs,
-		Contracts:       app.config.Monitor.Contracts,
-		EnableFiltering: app.config.Monitor.EnableFiltering,
-		FilterConfig:    app.config.Monitor.FilterConfig,
+		PollInterval:       app.config.Monitor.PollInterval,
+		BatchSize:          app.config.Monitor.BatchSize,
+		ConfirmationBlocks: app.config.Monitor.ConfirmationBlocks,
+		StartBlock:         app.config.Monitor.StartBlock,
+		EnableWebSocket:    app.config.Monitor.EnableWebSocket,
+		MaxReorgDepth:      app.config.Monitor.MaxReorgDepth,
 	}
 
-	var err error
-	app.monitor, err = monitor.NewEventMonitor(monitorCfg, app.connection, app.storage, app.processor)
-	if err != nil {
-		return fmt.Errorf("failed to create event monitor: %w", err)
-	}
+	// Use actual constructor signature
+	app.monitor = monitor.NewEventMonitor(app.connection, app.storage, monitorCfg)
 
 	app.logger.Info("Event monitor initialized successfully")
 	return nil
@@ -277,10 +264,10 @@ func (app *Application) initializeServer() error {
 
 // Start starts the application
 func (app *Application) Start() error {
-	app.logger.Info("Starting RSK Event Listener", map[string]interface{}{
-		"version": AppVersion,
-		"config":  app.config.App.Environment,
-	})
+	app.logger.WithFields(logrus.Fields{
+		"version":     AppVersion,
+		"environment": app.config.App.Environment,
+	}).Info("Starting RSK Event Listener")
 
 	// Start HTTP server
 	if err := app.server.Start(); err != nil {
@@ -292,11 +279,11 @@ func (app *Application) Start() error {
 		return fmt.Errorf("failed to start event monitor: %w", err)
 	}
 
-	app.logger.Info("RSK Event Listener started successfully", map[string]interface{}{
+	app.logger.WithFields(logrus.Fields{
 		"server_address": fmt.Sprintf("%s:%d", app.config.Server.Host, app.config.Server.Port),
 		"rsk_endpoint":   app.config.RSK.NodeURL,
-		"contracts":      len(app.config.Monitor.Contracts),
-	})
+		"storage_type":   app.config.Storage.Type,
+	}).Info("RSK Event Listener started successfully")
 
 	return nil
 }
@@ -311,37 +298,37 @@ func (app *Application) Stop() error {
 	// Stop components in reverse order
 	if app.server != nil {
 		if err := app.server.Stop(); err != nil {
-			app.logger.Error("Failed to stop HTTP server", map[string]interface{}{"error": err})
+			app.logger.WithError(err).Error("Failed to stop HTTP server")
 		}
 	}
 
 	if app.monitor != nil {
 		if err := app.monitor.Stop(); err != nil {
-			app.logger.Error("Failed to stop event monitor", map[string]interface{}{"error": err})
+			app.logger.WithError(err).Error("Failed to stop event monitor")
 		}
 	}
 
 	if app.processor != nil {
 		if err := app.processor.Stop(); err != nil {
-			app.logger.Error("Failed to stop event processor", map[string]interface{}{"error": err})
+			app.logger.WithError(err).Error("Failed to stop event processor")
 		}
 	}
 
 	if app.notification != nil {
 		if err := app.notification.Stop(); err != nil {
-			app.logger.Error("Failed to stop notification manager", map[string]interface{}{"error": err})
+			app.logger.WithError(err).Error("Failed to stop notification manager")
 		}
 	}
 
 	if app.storage != nil {
 		if err := app.storage.Close(); err != nil {
-			app.logger.Error("Failed to close storage", map[string]interface{}{"error": err})
+			app.logger.WithError(err).Error("Failed to close storage")
 		}
 	}
 
 	if app.connection != nil {
 		if err := app.connection.Close(); err != nil {
-			app.logger.Error("Failed to close connection", map[string]interface{}{"error": err})
+			app.logger.WithError(err).Error("Failed to close connection")
 		}
 	}
 
@@ -353,16 +340,18 @@ func (app *Application) Stop() error {
 func (app *Application) GetStats() map[string]interface{} {
 	stats := map[string]interface{}{
 		"version":   AppVersion,
-		"uptime":    time.Since(time.Now()).String(), // This should be tracked properly
+		"uptime":    time.Since(app.startTime).String(),
 		"timestamp": time.Now(),
 	}
 
 	if app.connection != nil {
-		stats["connection"] = app.connection.GetStats()
+		stats["connection"] = app.connection.Stats()
 	}
 
 	if app.storage != nil {
-		stats["storage"] = app.storage.GetStats()
+		if storageStats, err := app.storage.GetStats(); err == nil {
+			stats["storage"] = storageStats
+		}
 	}
 
 	if app.monitor != nil {
@@ -386,40 +375,52 @@ func (app *Application) GetHealth() map[string]interface{} {
 		"status":    "healthy",
 		"timestamp": time.Now(),
 		"version":   AppVersion,
+		"uptime":    time.Since(app.startTime).String(),
 	}
 
 	components := make(map[string]bool)
+	var allHealthy = true
 
 	if app.connection != nil {
-		components["connection"] = app.connection.IsHealthy()
+		components["connection"] = app.connection.IsConnected()
+		if !components["connection"] {
+			allHealthy = false
+		}
 	}
 
 	if app.storage != nil {
-		components["storage"] = app.storage.IsHealthy()
+		storageHealth := app.storage.GetHealth()
+		components["storage"] = storageHealth.Healthy
+		if !components["storage"] {
+			allHealthy = false
+		}
 	}
 
 	if app.monitor != nil {
-		components["monitor"] = app.monitor.IsHealthy()
+		monitorHealth := app.monitor.GetHealth()
+		components["monitor"] = monitorHealth.Healthy
+		if !components["monitor"] {
+			allHealthy = false
+		}
 	}
 
 	if app.processor != nil {
-		components["processor"] = app.processor.IsHealthy()
+		processorHealth := app.processor.GetHealth()
+		components["processor"] = processorHealth.Healthy
+		if !components["processor"] {
+			allHealthy = false
+		}
 	}
 
 	if app.notification != nil {
-		components["notification"] = app.notification.IsHealthy()
+		notificationHealth := app.notification.GetHealth()
+		components["notification"] = notificationHealth.Healthy
+		if !components["notification"] {
+			allHealthy = false
+		}
 	}
 
 	health["components"] = components
-
-	// Check if all components are healthy
-	allHealthy := true
-	for _, isHealthy := range components {
-		if !isHealthy {
-			allHealthy = false
-			break
-		}
-	}
 
 	if !allHealthy {
 		health["status"] = "unhealthy"
@@ -505,7 +506,6 @@ var validateConfigCmd = &cobra.Command{
 		fmt.Printf("Environment: %s\n", cfg.App.Environment)
 		fmt.Printf("RSK Node: %s\n", cfg.RSK.NodeURL)
 		fmt.Printf("Database: %s\n", cfg.Storage.Type)
-		fmt.Printf("Contracts: %d\n", len(cfg.Monitor.Contracts))
 
 		return nil
 	},
@@ -524,17 +524,17 @@ var testCmd = &cobra.Command{
 
 		fmt.Println("Testing RSK Event Listener connectivity...")
 
+		// Initialize logger for testing
+		if err := utils.InitLogger("info", "text", "stdout", ""); err != nil {
+			return fmt.Errorf("failed to initialize logger: %w", err)
+		}
+
 		// Test RSK connection
 		fmt.Printf("Testing RSK connection to %s...\n", cfg.RSK.NodeURL)
-		connCfg := &connection.ConnectionConfig{
-			RSKEndpoint:    cfg.RSK.NodeURL,
-			RequestTimeout: cfg.RSK.RequestTimeout,
-		}
-		conn, err := connection.NewConnectionManager(connCfg)
-		if err != nil {
-			return fmt.Errorf("failed to create connection: %w", err)
-		}
-		if err := conn.Connect(); err != nil {
+		conn := connection.NewConnectionManager(&cfg.RSK)
+		defer conn.Close()
+
+		if err := conn.HealthCheck(); err != nil {
 			return fmt.Errorf("failed to connect to RSK node: %w", err)
 		}
 		fmt.Println("✓ RSK connection successful")
@@ -545,16 +545,16 @@ var testCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to create storage: %w", err)
 		}
+		defer store.Close()
+
 		if err := store.Connect(); err != nil {
 			return fmt.Errorf("failed to connect to storage: %w", err)
 		}
 		fmt.Println("✓ Storage connection successful")
 
 		// Test email (if configured)
-		if cfg.Notification.EnableEmailNotifications {
-			fmt.Println("Testing email configuration...")
-			// Email test would go here
-			fmt.Println("✓ Email configuration valid")
+		if cfg.Notifications.EnableEmailNotifications {
+			fmt.Println("✓ Email notifications enabled")
 		}
 
 		fmt.Println("\nAll connectivity tests passed! ✓")

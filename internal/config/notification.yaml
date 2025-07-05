@@ -27,22 +27,3 @@ notification:
       config:
         url: "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
         format: "slack"
-        
-    - id: "email_admin"
-      name: "Admin Email Notifications"
-      type: "email"
-      enabled: true
-      config:
-        recipients: ["admin@example.com"]
-        priority: "high"
-        
-    - id: "webhook_api"
-      name: "External API Webhook"
-      type: "webhook"
-      enabled: true
-      config:
-        url: "https://api.example.com/webhooks/events"
-        method: "POST"
-        headers:
-          Authorization: "Bearer YOUR_API_TOKEN"
-          Content-Type: "application/json"
