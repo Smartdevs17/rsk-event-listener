@@ -1,0 +1,64 @@
+# Create test.yaml manually
+mkdir -p config data
+
+cat > config/test.yaml << 'EOF'
+app:
+  name: "rsk-event-listener"
+  version: "1.0.0"
+  environment: "test"
+  debug: false
+
+rsk:
+  node_url: "https://public-node.testnet.rsk.co"
+  network_id: 31
+  request_timeout: "30s"
+  retry_attempts: 3
+  retry_delay: "5s"
+  max_connections: 5
+
+storage:
+  type: "sqlite"
+  connection_string: "./data/test_events.db"
+  max_connections: 10
+  max_idle_time: "15m"
+
+monitor:
+  poll_interval: "30s"
+  batch_size: 50
+  confirmation_blocks: 12
+  start_block: 0
+  enable_websocket: false
+  max_reorg_depth: 64
+
+processor:
+  workers: 2
+  queue_size: 100
+  process_timeout: "30s"
+  retry_attempts: 3
+  retry_delay: "5s"
+  enable_async: true
+
+notifications:
+  enabled: false
+  queue_size: 50
+  workers: 1
+  retry_delay: "10s"
+  max_retries: 3
+  default_channel: "log"
+
+server:
+  port: 8081
+  host: "localhost"
+  read_timeout: "10s"
+  write_timeout: "10s"
+  enable_metrics: true
+  enable_health: true
+
+logging:
+  level: "info"
+  format: "text"
+  output: "stdout"
+  file: ""
+EOF
+
+echo "✅ config/test.yaml created!"

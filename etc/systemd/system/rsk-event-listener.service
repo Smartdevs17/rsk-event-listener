@@ -1,0 +1,47 @@
+# RSK Event Listener Systemd Service
+# File: /etc/systemd/system/rsk-event-listener.service
+
+[Unit]
+Description=RSK Event Listener - Smart Contract Event Monitoring
+Documentation=https://github.com/smartdevs17/rsk-event-listener
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=rsk-listener
+Group=rsk-listener
+WorkingDirectory=/opt/rsk-event-listener
+ExecStart=/opt/rsk-event-listener/bin/rsk-event-listener --config /opt/rsk-event-listener/config/production.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=always
+RestartSec=10
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/rsk-event-listener/data /opt/rsk-event-listener/logs
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+# Environment variables
+Environment=RSK_ENV=production
+Environment=LOG_LEVEL=info
+EnvironmentFile=-/opt/rsk-event-listener/.env
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+MemoryLimit=2G
+CPUQuota=200%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rsk-event-listener
+
+[Install]
+WantedBy=multi-user.target

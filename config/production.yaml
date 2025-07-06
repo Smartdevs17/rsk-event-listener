@@ -1,0 +1,65 @@
+# Production Configuration
+# Generated from your .env settings
+
+app:
+  name: "rsk-event-listener"
+  version: "1.0.0"
+  environment: "development"
+  debug: true
+
+rsk:
+  node_url: "https://public-node.testnet.rsk.co"
+  network_id: 31
+  request_timeout: "30s"
+  retry_attempts: 3
+  retry_delay: "5s"
+  max_connections: 10
+
+storage:
+  type: "sqlite"
+  connection_string: "./data/events.db"
+  max_connections: 10
+  max_idle_time: "15m"
+
+monitor:
+  poll_interval: "15s"
+  batch_size: 100
+  confirmation_blocks: 12
+  start_block: 0
+  enable_websocket: false
+  max_reorg_depth: 64
+
+processor:
+  workers: 4
+  queue_size: 1000
+  process_timeout: "30s"
+  retry_attempts: 3
+  retry_delay: "5s"
+  enable_async: true
+
+notifications:
+  enabled: true
+  queue_size: 100
+  workers: 2
+  retry_delay: "5s"
+  max_retries: 3
+  default_channel: "log"
+  max_concurrent_notifications: 5
+  notification_timeout: "30s"
+  retry_attempts: 3
+  enable_email_notifications: true
+  enable_webhook_notifications: false
+
+server:
+  port: 8080
+  host: "0.0.0.0"
+  read_timeout: "10s"
+  write_timeout: "10s"
+  enable_metrics: true
+  enable_health: true
+
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+  file: ""
