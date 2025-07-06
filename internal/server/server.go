@@ -138,13 +138,24 @@ func (s *HTTPServer) Start() error {
 		"address": s.server.Addr,
 	})
 
+	// Create a channel to receive startup errors
+	errChan := make(chan error, 1)
+
 	go func() {
 		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			s.logger.Error("HTTP server error", map[string]interface{}{"error": err})
+			errChan <- err
 		}
 	}()
 
-	return nil
+	// Give the server a moment to start and check for immediate binding errors
+	select {
+	case err := <-errChan:
+		return fmt.Errorf("failed to start HTTP server: %w", err)
+	case <-time.After(100 * time.Millisecond):
+		// Server started successfully
+		return nil
+	}
 }
 
 // Stop stops the HTTP server

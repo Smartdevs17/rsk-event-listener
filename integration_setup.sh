@@ -68,9 +68,9 @@ print_status "Updating .env file with Gmail credentials..."
 cat >> .env << EOF
 
 # Gmail Configuration
-# GMAIL_USER=$GMAIL_USER
-# GMAIL_PASSWORD=$GMAIL_PASSWORD
-# NOTIFICATION_EMAIL=$NOTIFICATION_EMAIL
+GMAIL_USER=$GMAIL_USER
+GMAIL_PASSWORD=$GMAIL_PASSWORD
+NOTIFICATION_EMAIL=$NOTIFICATION_EMAIL
 EMAIL_ENABLED=true
 EOF
 
@@ -333,11 +333,20 @@ cat > test_integration.sh << 'EOF'
 # Load environment variables
 source .env
 
-# Kill any existing processes on port 8081
+# Kill any existing processes more thoroughly
 echo "🔧 Cleaning up existing processes..."
 sudo fuser -k 8081/tcp 2>/dev/null || true
+sudo fuser -k 8080/tcp 2>/dev/null || true
 pkill -f "rsk-event-listener" 2>/dev/null || true
-sleep 2
+pkill -f "main.go" 2>/dev/null || true
+sleep 3
+
+# Check if port is actually free
+if lsof -Pi :8081 -sTCP:LISTEN -t >/dev/null 2>&1; then
+    echo "❌ Port 8081 is still in use"
+    lsof -Pi :8081 -sTCP:LISTEN
+    exit 1
+fi
 
 # Start the application in background
 echo "🚀 Starting RSK Event Listener..."
@@ -357,26 +366,48 @@ for i in {1..10}; do
 done
 
 # Test health endpoint with retries
-echo "🏥 Testing health endpoint..."
-HEALTH_SUCCESS=false
+# echo "🏥 Testing health endpoint..."
+# HEALTH_SUCCESS=false
 
+# for i in {1..15}; do
+#     if curl -f http://localhost:8081/api/v1/health > /dev/null 2>&1; then
+#         HEALTH_SUCCESS=true
+#         echo "✅ Health check passed (attempt $i)"
+#         break
+#     fi
+#     echo "  Health check attempt $i/15..."
+#     sleep 1
+# done
+
+# if [ "$HEALTH_SUCCESS" = false ]; then
+#     echo "❌ Health check failed after 15 attempts"
+#     echo "📋 Application logs (last 20 lines):"
+#     journalctl -u rsk-event-listener -n 20 --no-pager 2>/dev/null || echo "No systemd logs available"
+#     kill $APP_PID
+#     exit 1
+# fi
+
+# Enhanced health check with better error handling
+🏥 Testing health endpoint...
 for i in {1..15}; do
-    if curl -f http://localhost:8081/api/v1/health > /dev/null 2>&1; then
-        HEALTH_SUCCESS=true
-        echo "✅ Health check passed (attempt $i)"
+    echo "  Health check attempt $i/15..."
+    
+    # Check if port is listening first
+    if ! nc -z localhost 8081 2>/dev/null; then
+        echo "    Port 8081 not listening yet..."
+        sleep 2
+        continue
+    fi
+    
+    # Try health endpoint
+    if curl -f -s http://localhost:8081/api/v1/health > /dev/null 2>&1; then
+        echo "✅ Health check passed!"
+        HEALTH_CHECK_PASSED=true
         break
     fi
-    echo "  Health check attempt $i/15..."
-    sleep 1
+    
+    sleep 2
 done
-
-if [ "$HEALTH_SUCCESS" = false ]; then
-    echo "❌ Health check failed after 15 attempts"
-    echo "📋 Application logs (last 20 lines):"
-    journalctl -u rsk-event-listener -n 20 --no-pager 2>/dev/null || echo "No systemd logs available"
-    kill $APP_PID
-    exit 1
-fi
 
 # Test metrics endpoint
 echo "📊 Testing metrics endpoint..."

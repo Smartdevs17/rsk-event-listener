@@ -22,13 +22,11 @@ func InitLogger(level, format, output, file string) error {
 	// Set format
 	if format == "json" {
 		Logger.SetFormatter(&logrus.JSONFormatter{
-			TimestampFormat: "2025-01-02T15:04:05.000Z07:00",
-		})
+			TimestampFormat: "2006-01-02T15:04:05.000Z07:00"})
 	} else {
 		Logger.SetFormatter(&logrus.TextFormatter{
 			FullTimestamp:   true,
-			TimestampFormat: "2025-01-02T15:04:05.000Z07:00",
-		})
+			TimestampFormat: "2006-01-02T15:04:05.000Z07:00"})
 	}
 
 	// Set output
