@@ -292,10 +292,11 @@ func (app *Application) Start() error {
 func (app *Application) Stop() error {
 	app.logger.Info("Stopping RSK Event Listener")
 
-	// Cancel context to stop all components
-	app.cancel()
+	// Create a shutdown timeout context (separate from main context)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
-	// Stop components in reverse order
+	// Stop components in reverse order with controlled shutdown
 	if app.server != nil {
 		if err := app.server.Stop(); err != nil {
 			app.logger.WithError(err).Error("Failed to stop HTTP server")
@@ -303,11 +304,23 @@ func (app *Application) Stop() error {
 	}
 
 	if app.monitor != nil {
-		if err := app.monitor.Stop(); err != nil {
-			app.logger.WithError(err).Error("Failed to stop event monitor")
+		// Stop monitor gracefully with timeout
+		done := make(chan error, 1)
+		go func() {
+			done <- app.monitor.Stop()
+		}()
+
+		select {
+		case err := <-done:
+			if err != nil {
+				app.logger.WithError(err).Error("Failed to stop event monitor")
+			}
+		case <-shutdownCtx.Done():
+			app.logger.Warn("Monitor shutdown timed out")
 		}
 	}
 
+	// Stop other components...
 	if app.processor != nil {
 		if err := app.processor.Stop(); err != nil {
 			app.logger.WithError(err).Error("Failed to stop event processor")
@@ -331,6 +344,9 @@ func (app *Application) Stop() error {
 			app.logger.WithError(err).Error("Failed to close connection")
 		}
 	}
+
+	// Finally cancel the main context
+	app.cancel()
 
 	app.logger.Info("RSK Event Listener stopped successfully")
 	return nil

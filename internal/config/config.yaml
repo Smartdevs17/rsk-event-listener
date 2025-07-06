@@ -46,7 +46,7 @@
 #   default_channel: "log"
 
 # server:
-#   port: 8080
+#   port: 8081
 #   host: "0.0.0.0"
 #   read_timeout: "10s"
 #   write_timeout: "10s"
@@ -113,7 +113,7 @@ notifications:
   default_channel: "log"
 
 server:
-  port: 8080
+  port: 8081
   host: "0.0.0.0"
   read_timeout: "10s"
   write_timeout: "10s"

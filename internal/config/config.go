@@ -203,7 +203,7 @@ func setDefaults() {
 	viper.SetDefault("notifications.default_channel", "log")
 
 	// Server defaults
-	viper.SetDefault("server.port", 8080)
+	viper.SetDefault("server.port", 8081)
 	viper.SetDefault("server.host", "0.0.0.0")
 	viper.SetDefault("server.read_timeout", "10s")
 	viper.SetDefault("server.write_timeout", "10s")

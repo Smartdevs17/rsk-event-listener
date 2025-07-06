@@ -131,7 +131,7 @@ fi
 
 # Build the email test executable
 print_status "Building email test executable..."
-go build -o email_test_main ./cmd/listener/email_test_main.go
+go build -o email_test_main ./test/mock/email_test_main.go
 if [[ $? -ne 0 ]]; then
     print_error "Failed to build email test executable"
     exit 1
