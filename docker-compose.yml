@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  rsk-listener:
+    build: .
+    container_name: rsk-event-listener
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8081:8081"
+      - "9090:9090"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
