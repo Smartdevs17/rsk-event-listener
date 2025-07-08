@@ -1,6 +1,3 @@
-# Production Configuration
-# Generated from your .env settings
-
 app:
   name: "rsk-event-listener"
   version: "1.0.0"
@@ -8,8 +5,13 @@ app:
   debug: true
 
 rsk:
-  node_url: "https://public-node.testnet.rsk.co"
+  node_url: "https://rsk-testnet.getblock.io/mainnet/"  # Alternative endpoint
   network_id: 31
+  backup_nodes:
+    - "https://public-node.testnet.rsk.co"
+    - "https://rsk-testnet.getblock.io/mainnet/"
+    - "https://testnet.sovryn.app/rpc"
+    - "wss://public-node.testnet.rsk.co/websocket"
   request_timeout: "30s"
   retry_attempts: 3
   retry_delay: "5s"
@@ -22,8 +24,8 @@ storage:
   max_idle_time: "15m"
 
 monitor:
-  poll_interval: "15s"
-  batch_size: 100
+  poll_interval: "30s"  # Increased interval to reduce requests
+  batch_size: 50        # Reduced batch size
   confirmation_blocks: 12
   start_block: 0
   enable_websocket: false
