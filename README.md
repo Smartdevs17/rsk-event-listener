@@ -21,9 +21,10 @@ A high-performance, production-ready event monitoring system for Rootstock (RSK)
 
 ### Prerequisites
 
-- Go 1.21 or higher
+- Go 1.24 or higher
 - SQLite (for MVP) or PostgreSQL (for production)
 - RSK node access (public nodes supported)
+- [Make](https://www.gnu.org/software/make/) utility (standard on Linux/macOS)
 
 ### Quick Start
 
@@ -35,23 +36,49 @@ cd rsk-event-listener
 # Install dependencies
 go mod download
 
-# Set up configuration
+# Copy and edit environment variables
 cp .env.example .env
 # Edit .env with your settings
 
+# Build the application
+make build
+
 # Run the application
-go run cmd/listener/main.go
+make run
 ```
+
+---
+
+## 🧰 Makefile Usage
+
+This project includes a Makefile for common development and deployment tasks:
+
+| Command                | Description                                 |
+|------------------------|---------------------------------------------|
+| `make build`           | Build the Go binary                         |
+| `make run`             | Run the application with production config  |
+| `make test`            | Run all unit and integration tests          |
+| `make lint`            | Run code linting (requires golangci-lint)   |
+| `make fmt`             | Format Go code                              |
+| `make docker`          | Build the Docker image                      |
+| `make docker-run`      | Build and run with Docker Compose           |
+| `make clean`           | Remove binaries and databases, stop Docker  |
+| `make logs`            | Tail application logs                       |
+| `make help`            | Show all available make targets             |
+
+---
 
 ### Docker Installation
 
 ```bash
-# Build the image
-docker build -t rsk-event-listener .
+# Build the Docker image
+make docker
 
-# Run with docker-compose
-docker-compose up -d
+# Run with Docker Compose
+make docker-run
 ```
+
+---
 
 ## ⚙️ Configuration
 

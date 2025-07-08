@@ -331,7 +331,7 @@ func (ev *EventValidator) applyValidationRule(event *models.Event, rule *Validat
 	switch rule.Type {
 	case "required":
 		if fieldValue == nil || fieldValue == "" {
-			return fmt.Errorf(rule.Message)
+			fmt.Errorf("%s", rule.Message)
 		}
 	case "format":
 		return ev.validateFieldFormat(fieldValue, rule)
@@ -396,7 +396,7 @@ func (ev *EventValidator) validateFieldFormat(value interface{}, rule *Validatio
 			return fmt.Errorf("invalid regex pattern: %s", rule.Pattern)
 		}
 		if !matched {
-			return fmt.Errorf(rule.Message)
+			fmt.Errorf("%s", rule.Message)
 		}
 	}
 
@@ -452,7 +452,7 @@ func (ev *EventValidator) validateFieldRegex(value interface{}, rule *Validation
 	}
 
 	if !matched {
-		return fmt.Errorf(rule.Message)
+		fmt.Errorf("%s", rule.Message)
 	}
 
 	return nil
