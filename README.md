@@ -348,8 +348,7 @@ swag init -g cmd/listener/main.go
 
 - **Documentation**: [Full Documentation](https://smartdevs17.github.io/rsk-event-listener)
 - **Issues**: [GitHub Issues](https://github.com/smartdevs17/rsk-event-listener/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/smartdevs17/rsk-event-listener/discussions)
-- **RSK Community**: [RSK Discord](https://discord.gg/rsk)
+- **RSK Community**: [RSK Discord](https://discord.gg/rootstock)
 
 ## 🗺 Roadmap
 
