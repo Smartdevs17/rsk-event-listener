@@ -91,6 +91,11 @@ func (app *Application) initializeLogger() error {
 func (app *Application) initializeComponents() error {
 	app.logger.Info("Initializing application components")
 
+	// Initialize metrics manager
+	if err := app.initializeMetrics(); err != nil {
+		return fmt.Errorf("failed to initialize metrics: %w", err)
+	}
+
 	// Initialize connection manager
 	if err := app.initializeConnection(); err != nil {
 		return fmt.Errorf("failed to initialize connection: %w", err)
@@ -239,6 +244,20 @@ func (app *Application) initializeMonitor() error {
 	app.monitor = monitor.NewEventMonitor(app.connection, app.storage, monitorCfg)
 
 	app.logger.Info("Event monitor initialized successfully")
+	return nil
+}
+
+// initializeMetrics initializes the metrics manager if enabled
+func (app *Application) initializeMetrics() error {
+	if !app.config.Server.EnableMetrics {
+		app.logger.Info("Metrics disabled in configuration")
+		app.metricsManager = nil
+		return nil
+	}
+
+	app.logger.Info("Initializing metrics manager")
+	app.metricsManager = metrics.NewManager()
+	app.logger.Info("Metrics manager initialized successfully")
 	return nil
 }
 

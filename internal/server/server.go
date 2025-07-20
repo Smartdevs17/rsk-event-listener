@@ -100,12 +100,13 @@ func (s *HTTPServer) setupRouter() {
 		api.HandleFunc("/health/detailed", s.detailedHealthHandler).Methods("GET")
 	}
 
-	// Metrics endpoint
+	// Always expose /metrics endpoint (Prometheus standard)
+	s.router.Handle("/metrics", promhttp.Handler())
+
+	// Only expose /stats if metrics are enabled
 	if s.config.EnableMetrics {
-		s.router.Handle("/metrics", promhttp.Handler())
 		api.HandleFunc("/stats", s.statsHandler).Methods("GET")
 	}
-
 	// Event endpoints
 	api.HandleFunc("/events", s.listEventsHandler).Methods("GET")
 	api.HandleFunc("/events/{hash}", s.getEventHandler).Methods("GET")
@@ -145,27 +146,6 @@ func (s *HTTPServer) Start() error {
 		"address":         s.server.Addr,
 		"metrics_enabled": s.config.EnableMetrics,
 	})
-
-	// Immediately update system and component metrics so they appear on first scrape
-	if s.metricsManager != nil {
-		s.metricsManager.UpdateSystemMetrics()
-		if s.storage != nil {
-			health := s.storage.GetHealth()
-			s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("storage", health.Healthy)
-		}
-		if s.monitor != nil {
-			health := s.monitor.GetHealth()
-			s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("monitor", health.Healthy)
-		}
-		if s.processor != nil {
-			health := s.processor.GetHealth()
-			s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("processor", health.Healthy)
-		}
-		if s.notification != nil {
-			health := s.notification.GetHealth()
-			s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("notification", health.Healthy)
-		}
-	}
 
 	// Start periodic updater as before
 	if s.metricsManager != nil {
