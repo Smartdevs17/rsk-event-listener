@@ -13,6 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/sirupsen/logrus"
+	"github.com/smartdevs17/rsk-event-listener/internal/metrics"
 	"github.com/smartdevs17/rsk-event-listener/internal/models"
 	"github.com/smartdevs17/rsk-event-listener/pkg/utils"
 	_ "modernc.org/sqlite"
@@ -24,6 +25,8 @@ type SQLiteStorage struct {
 	config     *StorageConfig
 	logger     *logrus.Logger
 	migrations []*Migration
+
+	metricsManager *metrics.Manager
 }
 
 // NewSQLiteStorage creates a new SQLite storage instance
@@ -114,6 +117,8 @@ func (s *SQLiteStorage) Migrate() error {
 
 // SaveEvent saves a single event
 func (s *SQLiteStorage) SaveEvent(ctx context.Context, event *models.Event) error {
+	start := time.Now()
+
 	dataJSON, err := json.Marshal(event.Data)
 	if err != nil {
 		return utils.NewAppError(utils.ErrCodeDatabase, "Failed to marshal event data", err.Error())
@@ -133,6 +138,20 @@ func (s *SQLiteStorage) SaveEvent(ctx context.Context, event *models.Event) erro
 
 	if err != nil {
 		return utils.NewAppError(utils.ErrCodeDatabase, "Failed to save event", err.Error())
+	}
+
+	if s.metricsManager != nil {
+		status := "success"
+		if err != nil {
+			status = "error"
+		}
+
+		s.metricsManager.GetPrometheusMetrics().RecordDatabaseOperation(
+			"upsert",
+			"contracts",
+			status,
+			time.Since(start),
+		)
 	}
 
 	return nil
@@ -424,6 +443,8 @@ func (s *SQLiteStorage) DeleteEvent(ctx context.Context, id string) error {
 
 // SaveContract saves a contract
 func (s *SQLiteStorage) SaveContract(ctx context.Context, contract *models.Contract) error {
+	start := time.Now()
+
 	query := `
 		INSERT OR REPLACE INTO contracts (address, name, abi, start_block, active, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -435,6 +456,20 @@ func (s *SQLiteStorage) SaveContract(ctx context.Context, contract *models.Contr
 
 	if err != nil {
 		return utils.NewAppError(utils.ErrCodeDatabase, "Failed to save contract", err.Error())
+	}
+
+	if s.metricsManager != nil {
+		status := "success"
+		if err != nil {
+			status = "error"
+		}
+
+		s.metricsManager.GetPrometheusMetrics().RecordDatabaseOperation(
+			"upsert",
+			"contracts",
+			status,
+			time.Since(start),
+		)
 	}
 
 	return nil

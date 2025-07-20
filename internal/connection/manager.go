@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/sirupsen/logrus"
 	"github.com/smartdevs17/rsk-event-listener/internal/config"
+	"github.com/smartdevs17/rsk-event-listener/internal/metrics"
 	"github.com/smartdevs17/rsk-event-listener/pkg/utils"
 )
 
@@ -37,6 +38,7 @@ type ConnectionManager struct {
 	stats           ConnectionStats
 	lastHealthCheck time.Time
 	isHealthy       bool
+	metricsManager  *metrics.Manager
 }
 
 // ConnectionStats holds connection statistics
@@ -315,4 +317,44 @@ func (cm *ConnectionManager) getAllURLs() []string {
 	}
 
 	return urls
+}
+
+// Call invokes a contract method call
+func (cm *ConnectionManager) Call(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	start := time.Now()
+	client, err := cm.GetClientWithContext(ctx)
+	endpoint := ""
+	if client != nil {
+		endpoint = cm.stats.CurrentURL
+	}
+	if err != nil {
+		status := "error"
+		if cm.metricsManager != nil {
+			cm.metricsManager.GetPrometheusMetrics().RecordConnectionError(endpoint, "rpc_call_failed")
+			cm.metricsManager.GetPrometheusMetrics().RecordRPCRequest(endpoint, method, status, time.Since(start))
+		}
+		return err
+	}
+	// Get the underlying RPC client
+	rpcClient := client.Client() // ethclient.Client.Client() returns *rpc.Client
+	if rpcClient == nil {
+		status := "error"
+		if cm.metricsManager != nil {
+			cm.metricsManager.GetPrometheusMetrics().RecordConnectionError(endpoint, "rpc_client_nil")
+			cm.metricsManager.GetPrometheusMetrics().RecordRPCRequest(endpoint, method, status, time.Since(start))
+		}
+		return fmt.Errorf("underlying RPC client is nil")
+	}
+	callErr := rpcClient.CallContext(ctx, result, method, args...)
+	status := "success"
+	if callErr != nil {
+		status = "error"
+		if cm.metricsManager != nil {
+			cm.metricsManager.GetPrometheusMetrics().RecordConnectionError(endpoint, "rpc_call_failed")
+		}
+	}
+	if cm.metricsManager != nil {
+		cm.metricsManager.GetPrometheusMetrics().RecordRPCRequest(endpoint, method, status, time.Since(start))
+	}
+	return callErr
 }

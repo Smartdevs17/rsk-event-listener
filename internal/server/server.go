@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 
+	"github.com/smartdevs17/rsk-event-listener/internal/metrics"
 	"github.com/smartdevs17/rsk-event-listener/internal/models"
 	"github.com/smartdevs17/rsk-event-listener/internal/monitor"
 	"github.com/smartdevs17/rsk-event-listener/internal/notification"
@@ -34,14 +35,15 @@ type ServerConfig struct {
 
 // HTTPServer represents the HTTP server
 type HTTPServer struct {
-	config       *ServerConfig
-	server       *http.Server
-	router       *mux.Router
-	storage      storage.Storage
-	monitor      *monitor.EventMonitor
-	processor    *processor.EventProcessor
-	notification *notification.NotificationManager
-	logger       *logrus.Logger
+	config         *ServerConfig
+	server         *http.Server
+	router         *mux.Router
+	storage        storage.Storage
+	monitor        *monitor.EventMonitor
+	processor      *processor.EventProcessor
+	notification   *notification.NotificationManager
+	metricsManager *metrics.Manager
+	logger         *logrus.Logger
 }
 
 // NewHTTPServer creates a new HTTP server
@@ -51,15 +53,17 @@ func NewHTTPServer(
 	monitor *monitor.EventMonitor,
 	processor *processor.EventProcessor,
 	notification *notification.NotificationManager,
+	metricsManager *metrics.Manager,
 ) (*HTTPServer, error) {
 
 	server := &HTTPServer{
-		config:       config,
-		storage:      storage,
-		monitor:      monitor,
-		processor:    processor,
-		notification: notification,
-		logger:       utils.GetLogger(),
+		config:         config,
+		storage:        storage,
+		monitor:        monitor,
+		processor:      processor,
+		notification:   notification,
+		metricsManager: metricsManager,
+		logger:         utils.GetLogger(),
 	}
 
 	// Setup router
@@ -83,6 +87,9 @@ func (s *HTTPServer) setupRouter() {
 	// Middleware
 	s.router.Use(s.loggingMiddleware)
 	s.router.Use(s.corsMiddleware)
+	if s.metricsManager != nil {
+		s.router.Use(s.metricsMiddleware)
+	}
 
 	// API routes
 	api := s.router.PathPrefix("/api/v1").Subrouter()
@@ -135,8 +142,35 @@ func (s *HTTPServer) setupRouter() {
 // Start starts the HTTP server
 func (s *HTTPServer) Start() error {
 	s.logger.Info("Starting HTTP server", map[string]interface{}{
-		"address": s.server.Addr,
+		"address":         s.server.Addr,
+		"metrics_enabled": s.config.EnableMetrics,
 	})
+
+	// Immediately update system and component metrics so they appear on first scrape
+	if s.metricsManager != nil {
+		s.metricsManager.UpdateSystemMetrics()
+		if s.storage != nil {
+			health := s.storage.GetHealth()
+			s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("storage", health.Healthy)
+		}
+		if s.monitor != nil {
+			health := s.monitor.GetHealth()
+			s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("monitor", health.Healthy)
+		}
+		if s.processor != nil {
+			health := s.processor.GetHealth()
+			s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("processor", health.Healthy)
+		}
+		if s.notification != nil {
+			health := s.notification.GetHealth()
+			s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("notification", health.Healthy)
+		}
+	}
+
+	// Start periodic updater as before
+	if s.metricsManager != nil {
+		go s.systemMetricsUpdater()
+	}
 
 	// Create a channel to receive startup errors
 	errChan := make(chan error, 1)
@@ -155,6 +189,41 @@ func (s *HTTPServer) Start() error {
 	case <-time.After(100 * time.Millisecond):
 		// Server started successfully
 		return nil
+	}
+}
+
+// systemMetricsUpdater updates system metrics periodically
+func (s *HTTPServer) systemMetricsUpdater() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			s.metricsManager.UpdateSystemMetrics()
+
+			// Update component health metrics
+			if s.metricsManager != nil {
+				s.metricsManager.UpdateSystemMetrics()
+				// Update component health metrics immediately
+				if s.storage != nil {
+					health := s.storage.GetHealth()
+					s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("storage", health.Healthy)
+				}
+				if s.monitor != nil {
+					health := s.monitor.GetHealth()
+					s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("monitor", health.Healthy)
+				}
+				if s.processor != nil {
+					health := s.processor.GetHealth()
+					s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("processor", health.Healthy)
+				}
+				if s.notification != nil {
+					health := s.notification.GetHealth()
+					s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("notification", health.Healthy)
+				}
+			}
+		}
 	}
 }
 
@@ -209,13 +278,13 @@ func (s *HTTPServer) corsMiddleware(next http.Handler) http.Handler {
 
 // healthHandler returns basic health status
 func (s *HTTPServer) healthHandler(w http.ResponseWriter, r *http.Request) {
-	health := map[string]interface{}{
-		"status":    "healthy",
-		"timestamp": time.Now(),
-		"version":   "1.0.0",
+	resp := map[string]interface{}{
+		"status":          "healthy",
+		"timestamp":       time.Now().UTC().Format(time.RFC3339Nano),
+		"version":         "1.0.0",
+		"metrics_enabled": s.config.EnableMetrics,
 	}
-
-	s.writeJSON(w, http.StatusOK, health)
+	s.writeJSON(w, http.StatusOK, resp)
 }
 
 // detailedHealthHandler returns detailed health status
@@ -244,11 +313,12 @@ func (s *HTTPServer) statsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stats := map[string]interface{}{
-		"timestamp":    time.Now(),
-		"storage":      storageStats,
-		"monitor":      s.monitor.GetStats(),
-		"processor":    s.processor.GetStats(),
-		"notification": s.notification.GetStats(),
+		"timestamp":       time.Now(),
+		"storage":         storageStats,
+		"monitor":         s.monitor.GetStats(),
+		"processor":       s.processor.GetStats(),
+		"notification":    s.notification.GetStats(),
+		"metrics_enabled": s.config.EnableMetrics,
 	}
 
 	s.writeJSON(w, http.StatusOK, stats)

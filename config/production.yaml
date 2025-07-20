@@ -53,7 +53,7 @@ notifications:
   enable_webhook_notifications: false
 
 server:
-  port: 8080
+  port: 8081
   host: "0.0.0.0"
   read_timeout: "10s"
   write_timeout: "10s"

@@ -19,7 +19,7 @@ spec:
       - name: listener
         image: rsk-event-listener:latest
         ports:
-        - containerPort: 8080
+        - containerPort: 8081
         env:
         - name: RSK_ENDPOINT
           value: "https://public-node.rsk.co"
@@ -40,13 +40,13 @@ spec:
         livenessProbe:
           httpGet:
             path: /api/v1/health
-            port: 8080
+            port: 8081
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /api/v1/health
-            port: 8080
+            port: 8081
           initialDelaySeconds: 5
           periodSeconds: 5
 ---
@@ -60,5 +60,5 @@ spec:
   ports:
   - protocol: TCP
     port: 80
-    targetPort: 8080
+    targetPort: 8081
   type: LoadBalancer

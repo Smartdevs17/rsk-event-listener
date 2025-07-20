@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/smartdevs17/rsk-event-listener/internal/metrics"
 	"github.com/smartdevs17/rsk-event-listener/internal/models"
 	"github.com/smartdevs17/rsk-event-listener/internal/notification"
 	"github.com/smartdevs17/rsk-event-listener/internal/storage"
@@ -68,6 +69,9 @@ type EventProcessor struct {
 
 	// Statistics
 	stats *ProcessorStats
+
+	// Metrics manager
+	metricsManager *metrics.Manager
 }
 
 // ProcessorConfig holds processor configuration
@@ -378,6 +382,24 @@ func (ep *EventProcessor) ProcessEvent(ctx context.Context, event *models.Event)
 		"rules_executed", len(result.RulesExecuted),
 		"workflows_executed", len(result.WorkflowsExecuted),
 		"processing_time", result.ProcessingTime)
+
+	// Record metrics// Record processing metrics
+	prometheus := ep.metricsManager.GetPrometheusMetrics()
+	prometheus.RecordEventProcessingDuration(
+		event.Address,
+		event.EventName,
+		time.Since(startTime),
+	)
+
+	status := "success"
+	if !result.Success || result.Error != nil {
+		status = "error"
+	}
+	prometheus.RecordEventProcessed(
+		event.Address,
+		event.EventName,
+		status,
+	)
 
 	return result, nil
 }
