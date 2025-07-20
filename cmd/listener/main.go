@@ -16,6 +16,7 @@ import (
 
 	"github.com/smartdevs17/rsk-event-listener/internal/config"
 	"github.com/smartdevs17/rsk-event-listener/internal/connection"
+	"github.com/smartdevs17/rsk-event-listener/internal/metrics"
 	"github.com/smartdevs17/rsk-event-listener/internal/monitor"
 	"github.com/smartdevs17/rsk-event-listener/internal/notification"
 	"github.com/smartdevs17/rsk-event-listener/internal/processor"
@@ -40,6 +41,8 @@ type Application struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	startTime    time.Time
+
+	metricsManager *metrics.Manager
 }
 
 // NewApplication creates a new application instance
@@ -253,7 +256,7 @@ func (app *Application) initializeServer() error {
 	}
 
 	var err error
-	app.server, err = server.NewHTTPServer(serverCfg, app.storage, app.monitor, app.processor, app.notification)
+	app.server, err = server.NewHTTPServer(serverCfg, app.storage, app.monitor, app.processor, app.notification, app.metricsManager)
 	if err != nil {
 		return fmt.Errorf("failed to create HTTP server: %w", err)
 	}

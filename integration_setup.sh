@@ -336,7 +336,7 @@ source .env
 # Kill any existing processes more thoroughly
 echo "🔧 Cleaning up existing processes..."
 sudo fuser -k 8081/tcp 2>/dev/null || true
-sudo fuser -k 8080/tcp 2>/dev/null || true
+sudo fuser -k 8081/tcp 2>/dev/null || true
 pkill -f "rsk-event-listener" 2>/dev/null || true
 pkill -f "main.go" 2>/dev/null || true
 sleep 3

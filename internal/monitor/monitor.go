@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/sirupsen/logrus"
 	"github.com/smartdevs17/rsk-event-listener/internal/connection"
+	"github.com/smartdevs17/rsk-event-listener/internal/metrics"
 	"github.com/smartdevs17/rsk-event-listener/internal/models"
 	"github.com/smartdevs17/rsk-event-listener/internal/storage"
 	"github.com/smartdevs17/rsk-event-listener/pkg/utils"
@@ -70,7 +71,8 @@ type EventMonitor struct {
 	reorgHandler *ReorgHandler
 
 	// Statistics
-	stats *MonitorStats
+	stats          *MonitorStats
+	metricsManager *metrics.Manager
 }
 
 // MonitorConfig holds monitor configuration
@@ -449,6 +451,36 @@ func (em *EventMonitor) ProcessBlock(ctx context.Context, blockNumber uint64) (*
 		"events_found", result.EventsFound,
 		"events_saved", result.EventsSaved,
 		"processing_time", result.ProcessingTime)
+
+	// Record metrics
+	if em.metricsManager != nil {
+		prometheus := em.metricsManager.GetPrometheusMetrics()
+
+		// Record block processing metrics
+		prometheus.RecordBlockProcessed()
+		prometheus.RecordBlockProcessingDuration(time.Since(startTime))
+		prometheus.UpdateLatestProcessedBlock(blockNumber)
+
+		if result != nil {
+			// Record event metrics
+			for _, event := range result.Events {
+				status := "success"
+				if result.Error != nil {
+					status = "error"
+				}
+				prometheus.RecordEventProcessed(
+					event.Address,
+					event.EventName,
+					status,
+				)
+			}
+		}
+
+		if err != nil {
+			// This could be expanded to track different error types
+			prometheus.RecordConnectionError("unknown", "processing_error")
+		}
+	}
 
 	return result, nil
 }

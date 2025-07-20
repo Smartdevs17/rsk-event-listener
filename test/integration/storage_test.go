@@ -285,7 +285,7 @@ func testNotificationOperations(t *testing.T, store storage.Storage) {
 		Title:     "Test Notification",
 		Message:   "This is a test notification",
 		Data:      map[string]interface{}{"test": true},
-		Target:    "http://localhost:8080/webhook",
+		Target:    "http://localhost:8081/webhook",
 		Status:    "pending",
 		Attempts:  0,
 		CreatedAt: time.Now(),

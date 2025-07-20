@@ -1,0 +1,56 @@
+groups:
+  - name: rsk_event_listener
+    rules:
+      - alert: RSKEventListenerDown
+        expr: up{job="rsk-event-listener"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RSK Event Listener is down"
+          description: "RSK Event Listener has been down for more than 1 minute"
+
+      - alert: RSKHighErrorRate
+        expr: rate(rsk_connection_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High connection error rate"
+          description: "RSK connection error rate is {{ $value }} errors/sec"
+
+      - alert: RSKBlocksBehind
+        expr: rsk_blocks_behind > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RSK Event Listener falling behind"
+          description: "Event listener is {{ $value }} blocks behind the chain"
+
+      - alert: RSKReorgDetected
+        expr: increase(rsk_reorgs_detected_total[1h]) > 0
+        for: 0s
+        labels:
+          severity: info
+        annotations:
+          summary: "Blockchain reorganization detected"
+          description: "{{ $value }} reorg(s) detected in the last hour"
+
+      - alert: RSKComponentUnhealthy
+        expr: rsk_component_health == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RSK component unhealthy"
+          description: "Component {{ $labels.component }} is unhealthy"
+
+      - alert: RSKHighMemoryUsage
+        expr: rsk_memory_usage_bytes > 1073741824  # 1GB
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanize1024 }}B"
