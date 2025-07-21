@@ -147,6 +147,14 @@ func (s *HTTPServer) Start() error {
 		"metrics_enabled": s.config.EnableMetrics,
 	})
 
+	// Immediately update system and component metrics so they appear on first scrape
+	if s.metricsManager != nil {
+		s.metricsManager.UpdateSystemMetrics()
+
+		// Force initial component health metrics to be registered
+		s.updateComponentHealthMetrics()
+	}
+
 	// Start periodic updater as before
 	if s.metricsManager != nil {
 		go s.systemMetricsUpdater()
@@ -172,6 +180,26 @@ func (s *HTTPServer) Start() error {
 	}
 }
 
+// updateComponentHealthMetrics updates the health metrics of all components
+func (s *HTTPServer) updateComponentHealthMetrics() {
+	if s.storage != nil {
+		health := s.storage.GetHealth()
+		s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("storage", health.Healthy)
+	}
+	if s.monitor != nil {
+		health := s.monitor.GetHealth()
+		s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("monitor", health.Healthy)
+	}
+	if s.processor != nil {
+		health := s.processor.GetHealth()
+		s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("processor", health.Healthy)
+	}
+	if s.notification != nil {
+		health := s.notification.GetHealth()
+		s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("notification", health.Healthy)
+	}
+}
+
 // systemMetricsUpdater updates system metrics periodically
 func (s *HTTPServer) systemMetricsUpdater() {
 	ticker := time.NewTicker(30 * time.Second)
@@ -180,28 +208,9 @@ func (s *HTTPServer) systemMetricsUpdater() {
 	for {
 		select {
 		case <-ticker.C:
-			s.metricsManager.UpdateSystemMetrics()
-
-			// Update component health metrics
 			if s.metricsManager != nil {
 				s.metricsManager.UpdateSystemMetrics()
-				// Update component health metrics immediately
-				if s.storage != nil {
-					health := s.storage.GetHealth()
-					s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("storage", health.Healthy)
-				}
-				if s.monitor != nil {
-					health := s.monitor.GetHealth()
-					s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("monitor", health.Healthy)
-				}
-				if s.processor != nil {
-					health := s.processor.GetHealth()
-					s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("processor", health.Healthy)
-				}
-				if s.notification != nil {
-					health := s.notification.GetHealth()
-					s.metricsManager.GetPrometheusMetrics().UpdateComponentHealth("notification", health.Healthy)
-				}
+				s.updateComponentHealthMetrics() // Use the new method
 			}
 		}
 	}
