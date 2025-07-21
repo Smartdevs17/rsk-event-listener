@@ -8,9 +8,9 @@ rule_files:
 scrape_configs:
   - job_name: 'rsk-event-listener'
     static_configs:
-      - targets: ['localhost:8081']
-    metrics_path: /metrics
-    scrape_interval: 10s
+      - targets: ['localhost:8081']  # ✅ Correct port
+    metrics_path: /metrics           # ✅ Correct path
+    scrape_interval: 10s            # ✅ Good frequency
     scrape_timeout: 5s
 
 alerting:

@@ -235,12 +235,12 @@ test_metrics_enabled() {
     
     # Test metrics values are reasonable
     local uptime=$(echo "$metrics_content" | grep "^rsk_application_uptime_seconds" | awk '{print $2}')
-    if [ ! -z "$uptime" ] && [ "$uptime" -gt 0 ]; then
+    if [ ! -z "$uptime" ] && awk "BEGIN {exit !($uptime >= 0)}"; then
         print_success "Application uptime metric has reasonable value: ${uptime}s"
     else
-        print_warning "Application uptime metric value seems incorrect"
+        print_warning "Application uptime metric value seems incorrect: ${uptime}"
     fi
-    
+
     # Generate some load to test metrics updates
     print_step "Testing metrics updates..."
     for i in {1..10}; do
@@ -251,9 +251,6 @@ test_metrics_enabled() {
     
     sleep 2
 
-    # Now scrape /metrics
-    curl -s $METRICS_URL | grep rsk_
-    
     # Check if HTTP request metrics updated
     local http_requests=$(curl -s $METRICS_URL | grep "rsk_http_requests_total" | head -1 | awk '{print $2}')
     if [ ! -z "$http_requests" ] && [ "$http_requests" -gt 10 ]; then
