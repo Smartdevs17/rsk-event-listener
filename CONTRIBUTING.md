@@ -60,7 +60,7 @@ go test -tags=integration ./...
 
 ## Community
 
-- Join the [RSK Discord](https://discord.gg/rsk) for discussions and support.
+- Join the [RSK Discord](https://discord.gg/rootstock) for discussions and support.
 - See the [README.md](README.md) for more info.
 
 ---
